@@ -1,10 +1,10 @@
-name: Build Padavan YK-L1
+name: Build Padavan-NG YK-L1 3.4.4.0-104
 
 on:
+  workflow_dispatch:
   push:
     branches:
-      - master
-  workflow_dispatch:
+      - padavan-ng-104
 
 permissions:
   contents: read
@@ -14,158 +14,80 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
 
-    env:
-      DEBIAN_FRONTEND: noninteractive
-
     steps:
+      - name: Checkout configuration
+        uses: actions/checkout@v4
+        with:
+          ref: padavan-ng-104
+
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            unzip libtool-bin curl cmake gperf gawk flex bison \
-            xxd fakeroot cpio git python3-docutils gettext \
-            automake autopoint texinfo build-essential help2man \
-            pkg-config zlib1g-dev libgmp3-dev libmpc-dev \
-            libmpfr-dev libncurses5-dev libltdl-dev wget \
-            squashfs-tools file
+            autoconf automake autopoint cmake bison build-essential \
+            flex gawk gettext git gperf libtool libtool-bin \
+            pkg-config fakeroot kmod cpio doxygen texinfo help2man \
+            libncurses5-dev zlib1g-dev libsqlite3-dev gcc-multilib \
+            curl dos2unix unzip wget locales xxd libltdl-dev \
+            libgmp3-dev libmpfr-dev libarchive-tools libblkid-dev
 
-      - name: Download Padavan source
+      - name: Download Padavan-NG source
         run: |
           set -e
-          git clone --depth=1 https://github.com/a0575/padavan.git /opt/rt-n56u
-          test -f /opt/rt-n56u/trunk/configs/templates/YK-L1.config
-          mkdir -p "$GITHUB_WORKSPACE/output"
-
-      - name: Analyze OpenWrt YK-L1 image
-        run: |
-          set -e
-
-          IMAGE_URL="https://downloads.openwrt.org/releases/25.12.4/targets/ramips/mt7620/openwrt-25.12.4-ramips-mt7620-youku_yk-l1-squashfs-sysupgrade.bin"
-          IMAGE="/tmp/openwrt-y k-l1.bin"
-          ROOT="/tmp/openwrt-root"
-
-          IMAGE="/tmp/openwrt-yk-l1.bin"
-          mkdir -p "$ROOT"
-
-          echo "===== Download OpenWrt image ====="
-          wget -O "$IMAGE" "$IMAGE_URL"
-
-          echo "===== Image information ====="
-          ls -lh "$IMAGE"
-          sha256sum "$IMAGE"
-          file "$IMAGE"
-
-          echo "===== Locate SquashFS ====="
-          python3 - "$IMAGE" <<'PY'
-          import sys
-
-          path = sys.argv[1]
-          with open(path, "rb") as f:
-              data = f.read()
-
-          magic = b"hsqs"
-          offsets = []
-          pos = 0
-
-          while True:
-              pos = data.find(magic, pos)
-              if pos < 0:
-                  break
-              offsets.append(pos)
-              pos += 1
-
-          print("SquashFS offsets:", offsets)
-          if not offsets:
-              raise SystemExit("ERROR: SquashFS filesystem not found")
-
-          with open("/tmp/squashfs-offset.txt", "w") as f:
-              f.write(str(offsets[0]))
-          PY
-
-          OFFSET="$(cat /tmp/squashfs-offset.txt)"
-          echo "Using SquashFS offset: $OFFSET"
-
-          echo "===== SquashFS metadata ====="
-          unsquashfs -s -offset "$OFFSET" "$IMAGE"
-
-          echo "===== Extract filesystem ====="
-          unsquashfs -no-progress -offset "$OFFSET" -d "$ROOT" "$IMAGE"
-
-          echo "===== Wi-Fi drivers and firmware ====="
-          find "$ROOT/lib/modules" "$ROOT/lib/firmware" \
-            -type f 2>/dev/null \
-            | grep -Ei 'wifi|wireless|mt76|rt2|ralink|mediatek|mac80211' \
-            | head -250 || true
-
-          echo "===== Wireless scripts ====="
-          find "$ROOT/lib/netifd" "$ROOT/etc/hotplug.d" \
-            "$ROOT/etc/init.d" -type f 2>/dev/null \
-            | grep -Ei 'wireless|wifi|net|wlan|wpa' \
-            | head -200 || true
-
-          echo "===== Wireless configuration ====="
-          if [ -f "$ROOT/etc/config/wireless" ]; then
-            sed -n '1,240p' "$ROOT/etc/config/wireless"
-          fi
-
-          echo "===== Reconnect-related strings ====="
-          grep -RInaE \
-            'reconnect|auto.?connect|apcli|wpa_supplicant|scan_retry|retry.*connect' \
-            "$ROOT/lib/netifd" "$ROOT/etc/hotplug.d" \
-            "$ROOT/etc/config" "$ROOT/etc/init.d" \
-            2>/dev/null | head -300 || true
-
-          echo "===== Wireless packages ====="
-          grep -Ei 'wpad|hostapd|supplicant|mt76|kmod.*wifi|wireless' \
-            "$ROOT/usr/lib/opkg/status" 2>/dev/null \
-            | head -200 || true
-
-      - name: Inspect Padavan reconnect logic
-        run: |
-          set -e
-          cd /opt/rt-n56u/trunk/proprietary/rt_wifi/rtsoc/4.1.X.X/mt7628/embedded
-
-          echo "===== APCLI reconnect state ====="
-          sed -n '700,755p' ap/apcli_ctrl.c
-
-          echo "===== Scan completion ====="
-          sed -n '185,225p' common/scan.c
-
-          echo "===== Link down ====="
-          sed -n '1000,1110p' ap/ap_apcli.c
-
-          echo "===== Candidate selection ====="
-          sed -n '3130,3340p' ap/ap_apcli.c
+          git clone https://github.com/nilabsent/padavan-ng.git padavan-ng
+          cd padavan-ng
+          git checkout d2c584629
 
       - name: Download toolchain
         run: |
           set -e
-          cd /opt/rt-n56u/toolchain-mipsel
-          sh dl_toolchain.sh
+          wget -O /tmp/toolchain.tar.xz \
+            https://github.com/nilabsent/padavan-ng-builder/releases/download/release-2026.06.08_17.14.58/toolchain_uClibc-ng-1.0.58.tar.xz
+          tar -xJf /tmp/toolchain.tar.xz -C padavan-ng
 
-      - name: Configure and build firmware
+      - name: Verify board configuration
         run: |
           set -e
-          cd /opt/rt-n56u/trunk
+          test -f trunk/configs/templates/YK-L1.config || true
+          test -f trunk/configs/boards/YOUKU/YK-L1/partitions.config
+          test -f trunk/build_firmware.sh
+        working-directory: padavan-ng
 
-          cp configs/templates/YK-L1.config .config
-
-          sudo ./clear_tree
-          sudo ./build_firmware_modify YK-L1 0
-
-          test -n "$(find images -maxdepth 1 -type f -name '*.trx' -print -quit)"
-          cp images/*.trx "$GITHUB_WORKSPACE/output/"
-
-      - name: Show firmware details
+      - name: Configure and build YK-L1
         run: |
           set -e
-          ls -lh output/
-          sha256sum output/*.trx
+          cp "$GITHUB_WORKSPACE/trunk/configs/templates/YK-L1.config" \
+             padavan-ng/trunk/.config
 
-      - name: Upload firmware artifact
+          cd padavan-ng/trunk
+          sed -i 's/\r$//g' .config
+          ./clear_tree.sh
+          ./build_firmware.sh
+
+      - name: Check firmware size
+        run: |
+          set -e
+          mkdir -p output
+
+          PARTITIONS="padavan-ng/trunk/configs/boards/YOUKU/YK-L1/partitions.config"
+          IMAGE="$(find padavan-ng/trunk/images -maxdepth 1 -type f \
+            \( -name '*.trx' -o -name '*.bin' \) -print -quit)"
+
+          test -n "$IMAGE"
+          echo "Firmware: $IMAGE"
+          ls -lh "$IMAGE"
+          sha256sum "$IMAGE"
+
+          echo "Board partition limits:"
+          cat "$PARTITIONS"
+
+          cp "$IMAGE" output/
+          cp "$GITHUB_WORKSPACE/trunk/configs/templates/YK-L1.config" output/
+
+      - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
-          name: Padavan-YK-L1
-          path: output/*.trx
+          name: Padavan-NG-YK-L1-3.4.4.0-104
+          path: output/*
           if-no-files-found: error
           retention-days: 14
