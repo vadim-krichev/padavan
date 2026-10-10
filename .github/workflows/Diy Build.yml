@@ -23,14 +23,15 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            autoconf automake autopoint cmake bison build-essential \
-            flex gawk gettext git gperf libtool libtool-bin pkg-config \
-            fakeroot kmod cpio doxygen texinfo help2man \
-            libncurses5-dev zlib1g-dev libsqlite3-dev gcc-multilib \
-            curl dos2unix unzip wget locales xxd libltdl-dev \
-            libgmp3-dev libmpfr-dev libarchive-tools libblkid-dev \
-            ca-certificates zstd
+          sudo apt-get install -y \
+            autoconf autoconf-archive automake autopoint bison \
+            build-essential ca-certificates cmake cpio curl dos2unix \
+            doxygen fakeroot flex gawk gettext git gperf help2man \
+            kmod libarchive-tools libblkid-dev libcurl4-openssl-dev \
+            libgmp3-dev libidn2-dev libltdl-dev libmpc-dev \
+            libmpfr-dev libncurses5-dev libsqlite3-dev libssl-dev \
+            libtool libtool-bin locales pkg-config python3 \
+            python3-docutils texinfo unzip wget xxd zlib1g-dev
 
       - name: Download Padavan-NG source
         run: |
@@ -38,32 +39,35 @@ jobs:
           git clone https://github.com/nilabsent/padavan-ng.git padavan-ng
           cd padavan-ng
           git checkout d2c584629
+          echo "===== Source revision ====="
+          git rev-parse HEAD
 
-      - name: Verify YK-L1 board support
+      - name: Verify YK-L1 configuration and source support
         run: |
           set -e
-          echo "===== Custom configuration ====="
-          test -s trunk/configs/templates/YK-L1.config
+          CONFIG="$GITHUB_WORKSPACE/trunk/configs/templates/YK-L1.config"
+          test -s "$CONFIG"
 
-          echo "===== Padavan-NG board definitions ====="
-          find padavan-ng/trunk/configs/boards -maxdepth 3 \
-            -type f 2>/dev/null | grep -Ei 'youku|yk.?l1' || true
+          echo "===== Custom YK-L1 configuration ====="
+          grep -E '^(CONFIG_VENDOR|CONFIG_PRODUCT|CONFIG_FIRMWARE_PRODUCT_ID|CONFIG_FIRMWARE_WIFI2_DRIVER)=' "$CONFIG"
 
-          echo "===== Available templates ====="
-          find padavan-ng/trunk/configs/templates -type f \
-            2>/dev/null | head -100
+          echo "===== YK-L1 references in Padavan-NG ====="
+          cd padavan-ng
+          git grep -in 'YK-L1' || true
 
-          echo "===== Check required board files ====="
-          if [ ! -d padavan-ng/trunk/configs/boards/YOUKU/YK-L1 ]; then
-            echo "::error::YK-L1 board definition was not found in Padavan-NG."
-            echo "The template alone is insufficient; board files must be ported before building."
-            exit 1
-          fi
+          echo "===== Build scripts ====="
+          find . -maxdepth 3 -type f \
+            \( -name 'build_firmware.sh' -o -name 'clear_tree.sh' -o -name 'build_toolchain.sh' \) \
+            -print
 
-      - name: Prepare YK-L1 configuration
+          echo "===== Configuration templates ====="
+          find trunk/configs/templates -type f 2>/dev/null | head -100
+
+      - name: Prepare configuration
         run: |
           set -e
-          cp trunk/configs/templates/YK-L1.config padavan-ng/trunk/.config
+          cp "$GITHUB_WORKSPACE/trunk/configs/templates/YK-L1.config" \
+            padavan-ng/trunk/.config
           grep -E '^(CONFIG_VENDOR|CONFIG_PRODUCT|CONFIG_FIRMWARE_PRODUCT_ID|CONFIG_FIRMWARE_WIFI2_DRIVER)=' \
             padavan-ng/trunk/.config
 
@@ -84,13 +88,16 @@ jobs:
         run: |
           set -e
           mkdir -p "$GITHUB_WORKSPACE/output"
-          find padavan-ng/trunk/images -maxdepth 1 -type f \
-            \( -name '*.trx' -o -name '*.bin' \) -print
 
           IMAGE="$(find padavan-ng/trunk/images -maxdepth 1 -type f \
             \( -name '*.trx' -o -name '*.bin' \) -print -quit)"
 
-          test -n "$IMAGE"
+          if [ -z "$IMAGE" ]; then
+            echo "::error::No firmware image was produced."
+            exit 1
+          fi
+
+          echo "===== Firmware image ====="
           ls -lh "$IMAGE"
           sha256sum "$IMAGE"
           cp "$IMAGE" "$GITHUB_WORKSPACE/output/"
