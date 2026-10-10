@@ -1,4 +1,4 @@
-
+```yaml
 name: Build Padavan YK-L1
 
 on:
@@ -31,17 +31,17 @@ jobs:
             libmpfr-dev libncurses5-dev libltdl-dev wget
 
       - name: Download Padavan source
-            - name: Inspect AP-client reconnect code
-        run: |
-          grep -RniE \
-            --include='*.c' --include='*.h' \
-            'ApCliAutoConnect|APCLI_AUTO_CONNECT_SUPPORT|ApCliBssid|ApCliEnable' \
-            /opt/rt-n56u/trunk/linux-3.4.x \
-            2>/dev/null | head -n 100 || true
         run: |
           git clone --depth=1 https://github.com/a0575/padavan.git /opt/rt-n56u
           test -f /opt/rt-n56u/trunk/configs/templates/YK-L1.config
           mkdir -p "$GITHUB_WORKSPACE/output"
+
+      - name: Inspect AP-client reconnect code
+        run: |
+          grep -RniE \
+            --include='*.c' --include='*.h' \
+            'ApCliAutoConnect|APCLI_AUTO_CONNECT_SUPPORT|ApCliBssid|ApCliEnable' \
+            /opt/rt-n56u/trunk 2>/dev/null | head -n 100 || true
 
       - name: Download toolchain
         run: |
@@ -73,3 +73,4 @@ jobs:
           path: output/*.trx
           if-no-files-found: error
           retention-days: 14
+```
