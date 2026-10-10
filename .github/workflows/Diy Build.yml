@@ -1,7 +1,9 @@
 name: Build Padavan
 
-on: 
-  repository_dispatch:
+on:
+  push:
+    branches:
+      - master
   workflow_dispatch:
 
 jobs:
