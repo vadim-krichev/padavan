@@ -1,4 +1,3 @@
-```yaml
 name: Build Padavan YK-L1
 
 on:
@@ -82,4 +81,3 @@ jobs:
           path: output/*.trx
           if-no-files-found: error
           retention-days: 14
-```
