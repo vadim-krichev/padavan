@@ -34,22 +34,21 @@ jobs:
           test -f /opt/rt-n56u/trunk/configs/templates/YK-L1.config
           mkdir -p "$GITHUB_WORKSPACE/output"
 
-      - name: Inspect AP-client reconnect code
+      - name: Inspect reconnect logic
         run: |
-          cd /opt/rt-n56u
+          cd /opt/rt-n56u/trunk/proprietary/rt_wifi/rtsoc/4.1.X.X/mt7628/embedded
 
-          echo "===== AutoConnectStart callers ====="
-          grep -RniE --include='*.c' --include='*.h' \
-            'ApCliAutoConnectStart[[:space:]]*\(' trunk || true
+          echo "===== APCLI reconnect state ====="
+          sed -n '700,755p' ap/apcli_ctrl.c
 
-          echo "===== AutoConnectExec callers ====="
-          grep -RniE --include='*.c' --include='*.h' \
-            'ApCliAutoConnectExec[[:space:]]*\(' trunk || true
+          echo "===== Scan completion ====="
+          sed -n '185,225p' common/scan.c
 
-          echo "===== AP-client disconnect handlers ====="
-          grep -RniE --include='*.c' --include='*.h' \
-            'ApCliLinkDown|APCLI_CTRL_DISCONNECT|ApCliAutoConnectRunning' \
-            trunk/proprietary trunk/linux-3.4.x 2>/dev/null | head -n 150 || true
+          echo "===== Link down ====="
+          sed -n '1000,1110p' ap/ap_apcli.c
+
+          echo "===== Candidate selection ====="
+          sed -n '3130,3340p' ap/ap_apcli.c
 
       - name: Download toolchain
         run: |
