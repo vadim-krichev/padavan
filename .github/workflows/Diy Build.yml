@@ -1,6 +1,7 @@
+```yaml
 name: Build Padavan YK-L1
 
-'on':
+on:
   push:
     branches:
       - master
@@ -13,6 +14,9 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
+
+    env:
+      DEBIAN_FRONTEND: noninteractive
 
     steps:
       - name: Install dependencies
@@ -33,9 +37,20 @@ jobs:
 
       - name: Inspect AP-client reconnect code
         run: |
+          cd /opt/rt-n56u
+
+          echo "===== AutoConnectStart callers ====="
           grep -RniE --include='*.c' --include='*.h' \
-            'ApCliAutoConnect|APCLI_AUTO_CONNECT_SUPPORT|ApCliBssid|ApCliEnable' \
-            /opt/rt-n56u/trunk 2>/dev/null | head -n 100 || true
+            'ApCliAutoConnectStart[[:space:]]*\(' trunk || true
+
+          echo "===== AutoConnectExec callers ====="
+          grep -RniE --include='*.c' --include='*.h' \
+            'ApCliAutoConnectExec[[:space:]]*\(' trunk || true
+
+          echo "===== AP-client disconnect handlers ====="
+          grep -RniE --include='*.c' --include='*.h' \
+            'ApCliLinkDown|APCLI_CTRL_DISCONNECT|ApCliAutoConnectRunning' \
+            trunk/proprietary trunk/linux-3.4.x 2>/dev/null | head -n 150 || true
 
       - name: Download toolchain
         run: |
@@ -46,9 +61,12 @@ jobs:
         run: |
           set -e
           cd /opt/rt-n56u/trunk
+
           cp configs/templates/YK-L1.config .config
+
           sudo ./clear_tree
           sudo ./build_firmware_modify YK-L1 0
+
           test -n "$(find images -maxdepth 1 -type f -name '*.trx' -print -quit)"
           cp images/*.trx "$GITHUB_WORKSPACE/output/"
 
@@ -64,3 +82,4 @@ jobs:
           path: output/*.trx
           if-no-files-found: error
           retention-days: 14
+```
